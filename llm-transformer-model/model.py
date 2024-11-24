@@ -52,7 +52,7 @@ class LayerNormalization(nn.Module):
         return self.alpa * (x - mean) / (std + self.eps) + self.beta
 
 
-class FeedForward(nn.Module):
+class FeedForwardBlock(nn.Module):
     def __init__(self, d_model: int, d_ff: int, dropout: float):
         super().__init__()
         self.linear_1 = nn.Linear(d_model, d_ff) # w1 and b1
@@ -118,3 +118,38 @@ class MultiHeadAttention(nn.Module):
 
         # (batch_size, seq_len, d_model)
         return self.w_o(x)
+    
+class ResidualConnection(nn.Module):
+    def __init__(self, d_model: int, dropout: float):
+        super().__init__()
+        self.norm = LayerNormalization()
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, sublayer):
+        # (batch_size, seq_len, d_model)
+        return x + self.dropout(sublayer(self.norm(x))) # Partially modified
+    
+class EncoderBlock(nn.Module):
+    def __init__(self, self_attention_block: MultiHeadAttention, feed_forward_block: FeedForwardBlock, dropout: float) -> None:
+        super().__init__()
+        self.feed_forward_block = feed_forward_block
+        self.self_attention_block = self_attention_block
+        self.residual_connection = nn.ModuleList([
+            ResidualConnection(dropout) for _ in range(2)
+        ])
+
+    def forward(self, x, mask):
+        x = self.residual_connection[0](x, lambda x: self.self_attention_block(x, x, x, mask))
+        x = self.residual_connection[1](x, self.feed_forward_block)
+        return x
+
+class Encoder(nn.Module):
+    def __init_(self, layers: nn.ModuleList) -> None:
+        super().__init__()
+        self.layers = layers
+        self.norm = LayerNormalization()
+
+    def forward(self, x, mask):
+        for layer in self.layers:
+            x = layer(x, mask)
+        return self.norm(x)
