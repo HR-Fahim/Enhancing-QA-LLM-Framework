@@ -153,3 +153,96 @@ class Encoder(nn.Module):
         for layer in self.layers:
             x = layer(x, mask)
         return self.norm(x)
+
+
+class DecoderBlock(nn.Module):
+    def __init__(self, self_attention_block: MultiHeadAttention, cross_attention_block: MultiHeadAttention, feed_forward_block: FeedForwardBlock, dropout: float) -> None:
+        super().__init__()
+        self.self_attention_block = self_attention_block
+        self.cross_attention_block = cross_attention_block
+        self.feed_forward_block = feed_forward_block
+        self.residual_connection = nn.ModuleList([
+            ResidualConnection(dropout) for _ in range(3)
+        ])
+
+    def forward(self, x, encoder_output, src_mask, tgt_mask):
+        x = self.residual_connection[0](x, lambda x: self.self_attention_block(x, x, x, tgt_mask))
+        x = self.residual_connection[1](x, lambda x: self.cross_attention_block(x, encoder_output, encoder_output, src_mask))
+        x = self.residual_connection[2](x, self.feed_forward_block)
+        return x
+
+class Decoder(nn.Module):
+    def __init__(self, layers: nn.ModuleList) -> None:
+        super().__init__()
+        self.layers = layers
+        self.norm = LayerNormalization()
+
+    def forward(self, x, encoder_output, src_mask, tgt_mask):
+        for layer in self.layers:
+            x = layer(x, encoder_output, src_mask, tgt_mask)
+        return self.norm(x)
+
+class ProjectionLayer(nn.Module):
+    def __init__(self, d_model: int, vocab_size: int) -> None:
+        super().__init__()
+        self.proj = nn.Linear(d_model, vocab_size)
+
+    def forward(self, x):
+        # (batch_size, seq_len, vocab_size)
+        return self.log_softmax(self.proj(x), dim = -1)
+    
+class Transformer(nn.Module):
+    def __init__(self, encoder: Encoder, decoder: Decoder, src_embedding: InputEmbeddings, tgt_embedding: InputEmbeddings, src_positional_encoding: PositionalEncoding, tgt_positional_encoding: PositionalEncoding, projection_layer: ProjectionLayer) -> None: 
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.src_embedding = src_embedding
+        self.tgt_embedding = tgt_embedding
+        self.src_positional_encoding = src_positional_encoding
+        self.tgt_positional_encoding = tgt_positional_encoding
+        self.projection_layer = projection_layer
+
+    def encode(self, src, src_mask):
+        src = self.src_embedding(src)
+        src = self.src_positional_encoding(src)
+        return self.encoder(src, src_mask)
+    
+    def decode(self, tgt, encoder_output, src_mask, tgt_mask):
+        tgt = self.tgt_embedding(tgt)
+        tgt = self.tgt_positional_encoding(tgt)
+        return self.decoder(tgt, encoder_output, src_mask, tgt_mask)
+
+    def project(self, x):
+        return self.projection_layer(x)
+
+def build_transformer(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int, tgt_seq_len: int, d_model: int = 512, N: int = 6, head: int = 8, d_ff: int = 2, dropout: float = 0.1) -> Transformer:
+    src_embedding = InputEmbeddings(src_vocab_size, d_model)
+    tgt_embedding = InputEmbeddings(tgt_vocab_size, d_model)
+    src_positional_encoding = PositionalEncoding(d_model, src_seq_len, dropout)
+    tgt_positional_encoding = PositionalEncoding(d_model, tgt_seq_len, dropout)
+    
+    encoder_blocks = []
+
+    for _ in range(N):
+        encoder_blocks.append(EncoderBlock(MultiHeadAttention(d_model, head, dropout), FeedForwardBlock(d_model, d_ff, dropout), dropout))
+
+    encoder = Encoder(nn.ModuleList(encoder_blocks))
+
+    decoder_blocks = []
+
+    for _ in range(N):
+        decoder_blocks.append(DecoderBlock(MultiHeadAttention(d_model, head, dropout), MultiHeadAttention(d_model, head, dropout), FeedForwardBlock(d_model, d_ff, dropout), dropout))
+
+    decoder = Decoder(nn.ModuleList(decoder_blocks))
+
+    projection_layer = ProjectionLayer(d_model, tgt_vocab_size)
+
+    transformer = Transformer(encoder, decoder, src_embedding, tgt_embedding, src_positional_encoding, tgt_positional_encoding, projection_layer)
+
+    # Parameters
+
+    for p in transformer.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
+
+    return transformer
