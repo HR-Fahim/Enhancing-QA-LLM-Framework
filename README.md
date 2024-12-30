@@ -4,7 +4,7 @@
 
 - SQuAD
 - SQuAD 2.0
-- Results Table:
+- Results:
   [Results Table](https://docs.google.com/spreadsheets/d/1Z_xrNXTOo0Q83KoVQNJfTnMhKAK1en4CutISPHUHkHE/edit?usp=sharing)
 
 ## TODO:
