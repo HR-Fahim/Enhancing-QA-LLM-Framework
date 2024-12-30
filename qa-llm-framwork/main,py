@@ -1,0 +1,21 @@
+def main():
+    # Load the train and validation datasets
+    train_data = pd.read_csv("/kaggle/input/squad2-0-a-challenge-for-question-answering-syst/train.csv")
+    validation_data = pd.read_csv("/kaggle/input/squad2-0-a-challenge-for-question-answering-syst/validation.csv")
+
+    # Instantiate the DataPreprocessing class
+    data_preprocessing = DataPreprocessing(train_data, validation_data)
+
+    # Load the tokenizer
+    tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
+
+    # Preprocess the data and get the train and validation loaders
+    train_loader, validation_loader = data_preprocessing.train_validation_loaders(tokenizer)
+
+    # Loop through each model
+    for model_name, model_class_fn in class_dict.items():
+        print(f"Training {model_name}...")
+        train_and_evaluate_model(model_name, model_class_fn, train_loader, validation_loader)
+
+if __name__ == "__main__":
+    main()
