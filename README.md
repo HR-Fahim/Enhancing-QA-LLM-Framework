@@ -9,3 +9,6 @@
 
 - Analyze Datasets: SciQA, NewsQA, HotPotQA, TriviaQA
 - Output Visualizations
+- Draft Journal Paper
+- Poster
+- Presentation
