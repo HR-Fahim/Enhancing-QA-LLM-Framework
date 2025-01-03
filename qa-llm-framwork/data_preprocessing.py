@@ -67,8 +67,8 @@ class DataPreprocessing:
         context = re.sub(r'\s+', ' ', context).strip()    # Normalize whitespace
 
         # # Step 1: Clean special characters
-        question = re.sub(r'[^\x00-\x7F]+', ' ', context)  # Remove non-ASCII characters (e.g., â€“)
-        question = re.sub(r'\s+', ' ', context).strip()    # Normalize whitespace
+        question = re.sub(r'[^\x00-\x7F]+', ' ', question)  # Remove non-ASCII characters (e.g., â€“)
+        question = re.sub(r'\s+', ' ', question).strip()    # Normalize whitespace
 
         tokenized = tokenizer(
             text=question,
