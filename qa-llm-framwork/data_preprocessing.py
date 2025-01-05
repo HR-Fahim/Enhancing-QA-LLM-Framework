@@ -1,58 +1,62 @@
+import json
+import csv
 import pandas as pd
-import ast
 import re
 import os
 import torch
-import warnings
 from torch.utils.data import DataLoader
 from tokenizers import ByteLevelBPETokenizer
-from transformers import RobertaTokenizerFast, RobertaModel, default_data_collator
+from transformers import RobertaTokenizerFast, default_data_collator
 
 class DataPreprocessing:
+    """Preprocesses of SQuAD json data for training and validation."""
     def __init__(self, train_data, val_data):
         self.train_data = train_data
         self.val_data = val_data
 
-    def extract_answer_text(self, answer):
-        if isinstance(answer, str):
-            try:
-                # Replace 'array(..., dtype=object)' with list-like structure for parsing
-                cleaned_string = re.sub(r'array\((.*?), dtype=.*?\)', r'[\1]', answer)
-                data = ast.literal_eval(cleaned_string)
-            except (ValueError, SyntaxError):
-                return None
-        else:
-            data = answer  # If already a dictionary or not a string
-
-        # Extract the first string from 'text' if it's a list
-        if isinstance(data, dict) and 'text' in data and isinstance(data['text'], list):
-            first_text = data['text'][0]  # Extract the first element
-            if isinstance(first_text, list) and first_text:
-                return first_text[0].strip("[]").replace("'", "")  # Clean up the string
-        return None
-
-    def extract_answer_start(self, answer):
-        if isinstance(answer, str):
-            try:
-                # Replace 'array(..., dtype=int32)' with a list-like structure for parsing
-                cleaned_string = re.sub(r'array\((.*?), dtype=.*?\)', r'[\1]', answer)
-                data = ast.literal_eval(cleaned_string)
-            except (ValueError, SyntaxError):
-                return None
-        else:
-            data = answer  # If already a dictionary or not a string
-
-        # Extract the first integer from 'answer_start', handling nested lists
-        if isinstance(data, dict) and 'answer_start' in data:
-            answer_start = data['answer_start']
-            if isinstance(answer_start, list) and answer_start:
-                # If nested lists, flatten and take the first integer
-                if isinstance(answer_start[0], list):
-                    return int(answer_start[0][0])  # Handle nested lists
-                return int(answer_start[0])  # Handle single-level lists
-            elif isinstance(answer_start, int):
-                return int(answer_start)  # Directly return the integer
-        return None
+    @staticmethod
+    def process_squad_to_csv(input_path, output_path):
+        # Load the JSON data
+        with open(input_path, 'r', encoding='utf-8') as json_file:
+            squad_data = json.load(json_file)
+        
+        # Prepare a list to store rows
+        rows = []
+        
+        # Extract data
+        for article in squad_data['data']:
+            title = article.get('title', 'No Title')
+            for paragraph in article['paragraphs']:
+                context = paragraph['context']
+                for qa in paragraph['qas']:
+                    question_id = qa['id']
+                    question = qa['question']
+                    
+                    # Extract answers
+                    answer_texts = "; ".join([ans['text'] for ans in qa['answers']])
+                    answer_starts = "; ".join([str(ans['answer_start']) for ans in qa['answers']])
+                    
+                    # Add the row to the list
+                    rows.append([
+                        title, context, question_id, question, answer_texts, answer_starts
+                    ])
+        
+        # Save the data to a CSV file
+        with open(output_path, 'w', newline='', encoding='utf-8') as csv_file:
+            csv_writer = csv.writer(csv_file)
+            csv_writer.writerow([
+                "Article Title", "context", "Question ID", "question",
+                "answer_text", "Answer Start Positions"
+            ])
+            csv_writer.writerows(rows)
+        
+        # Convert rows to a DataFrame and display the head
+        df = pd.DataFrame(rows, columns=[
+            "Article Title", "context", "Question ID", "question",
+            "answer_text", "Answer Start Positions"
+        ])
+        print(f"Head of {output_path}:")
+        print(df.head())
 
     def preprocess_row(self, row, tokenizer):
         context = str(row['context']) if not pd.isna(row['context']) else ""
@@ -66,7 +70,6 @@ class DataPreprocessing:
         context = re.sub(r'[^\x00-\x7F]+', ' ', context)  # Remove non-ASCII characters (e.g., â€“)
         context = re.sub(r'\s+', ' ', context).strip()    # Normalize whitespace
 
-        # # Step 1: Clean special characters
         question = re.sub(r'[^\x00-\x7F]+', ' ', question)  # Remove non-ASCII characters (e.g., â€“)
         question = re.sub(r'\s+', ' ', question).strip()    # Normalize whitespace
 
@@ -102,12 +105,14 @@ class DataPreprocessing:
         texts = self.train_data['context'].tolist() + self.train_data['question'].tolist()
         return texts
 
-    def train_validation_loaders(self, tokenizer):
+    def train_validation_loaders(self):
+        # Save dataset text for ByteLevelBPETokenizer
         texts = self.create_tokenizer_dataset()
         with open('qa_texts.txt', 'w') as f:
             for text in texts:
                 f.write(f"{text}\n")
 
+        # Train ByteLevelBPETokenizer
         bpe_tokenizer = ByteLevelBPETokenizer()
         bpe_tokenizer.train(files=['qa_texts.txt'], vocab_size=10000, min_frequency=5, special_tokens=[
             "<s>", "<pad>", "</s>", "<unk>", "<mask>"
@@ -116,17 +121,19 @@ class DataPreprocessing:
         os.makedirs("/content/tokenizer_bpe", exist_ok=True)
         bpe_tokenizer.save_model("/content/tokenizer_bpe")
 
+        # Load the trained tokenizer
         vocab_file = "/content/tokenizer_bpe/vocab.json"
         merges_file = "/content/tokenizer_bpe/merges.txt"
 
         tokenizer = RobertaTokenizerFast(
             vocab_file=vocab_file,
             merges_file=merges_file,
-            model_max_length=512,  # Increased max length for better context understanding
+            model_max_length=512,
             pad_token="<pad>",
             clean_up_tokenization_spaces=False
         )
 
+        # Preprocess train and validation data
         preprocessed_train_data = [self.preprocess_row(row, tokenizer) for _, row in self.train_data.iterrows()]
         preprocessed_val_data = [self.preprocess_row(row, tokenizer) for _, row in self.val_data.iterrows()]
 
