@@ -1,15 +1,17 @@
-# Enhancing Few-Shot QA Framework with Simplified Mixture of Experts (MoE), Dynamic Multi-head Attention, and Learnable Positional Encoding
+# Enhancing Few-Shot Question Answering Frameworks with Simplified Mixture of Experts (MoE), Dynamic Multi-head Attention, and Learnable Positional Encoding
 
 ## Datasets (Benchmark):
 
-- SQuAD
-- SQuAD 2.0
+- Stanford Question Answering Dataset (SQuAD)
+
 - Results:
   [Results Table](https://docs.google.com/spreadsheets/d/1Z_xrNXTOo0Q83KoVQNJfTnMhKAK1en4CutISPHUHkHE/edit?usp=sharing)
 
-## TODO:
+_<b>Note:</b> The preprocessing part applied here for SQuAD (JSON) dataset. Other dataset preprocessing methods are given in the kaggle notebook._
 
-- Analyze Datasets: SciQA, NewsQA, HotPotQA, TriviaQA
+## Future Work:
+
+- Analyze Datasets: SQuAD 2.0, HotPotQA
 - Output Visualizations
 - Draft Journal Paper
 - Poster
