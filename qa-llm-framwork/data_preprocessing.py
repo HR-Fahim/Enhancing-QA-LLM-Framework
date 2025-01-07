@@ -1,5 +1,6 @@
 import json
 import csv
+import random
 import string
 import pandas as pd
 import re
@@ -59,17 +60,15 @@ class DataPreprocessing:
         print(f"Head of {output_path}:")
         print(df.head())
 
+    @staticmethod
     def remove_ascii_symbols(input_string):
-        # The set of ASCII symbols
-        symbols = string.punctuation  # This includes all punctuation symbols: !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
-        symbols_set = set(symbols) - {'?'} # Better identify qestions
-        
-        # Remove all ASCII symbols from the string
+        symbols = string.punctuation
+        symbols_set = set(symbols) - {'?'}
         cleaned_string = ''.join(char for char in input_string if char not in symbols_set)
-        
         return cleaned_string
 
-    def preprocess_row(self, row, tokenizer):
+    @staticmethod
+    def preprocess_row(row, tokenizer):
         context = str(row['context']) if not pd.isna(row['context']) else ""
         question = str(row['question']) if not pd.isna(row['question']) else ""
         answer_text = str(row['answer_text']) if not pd.isna(row['answer_text']) else ""
@@ -77,14 +76,6 @@ class DataPreprocessing:
         start_char = context.find(answer_text)
         end_char = start_char + len(answer_text) if start_char != -1 else -1
 
-        # Step 1: Clean special characters
-        # context = re.sub(r'[^\x00-\x7F]+', ' ', context)  # Remove non-ASCII characters (e.g., â€“)
-        # context = re.sub(r'\s+', ' ', context).strip()    # Normalize whitespace
-
-        # question = re.sub(r'[^\x00-\x7F]+', ' ', question)  # Remove non-ASCII characters (e.g., â€“)
-        # question = re.sub(r'\s+', ' ', question).strip()    # Normalize whitespace
-
-        # Function call for refining the context and question
         context = DataPreprocessing.remove_ascii_symbols(context)
         question = DataPreprocessing.remove_ascii_symbols(question)
 
@@ -148,8 +139,48 @@ class DataPreprocessing:
             clean_up_tokenization_spaces=False
         )
 
+        # Handle NaN values in train_data['answer_text']
+        self.train_data['answer_text'] = self.train_data['answer_text'].fillna('')
+
+        # Few-shot sampling
+        with_answers = self.train_data[self.train_data['answer_text'].str.len() > 0]
+        without_answers = self.train_data[self.train_data['answer_text'].str.len() == 0]
+
+        total_samples = 16
+        half_of_total_samples = total_samples // 2
+
+        few_shot_with_answers = with_answers.sample(
+            n=min(half_of_total_samples, len(with_answers)), random_state=45, replace=True
+        )
+
+        if len(without_answers) >= half_of_total_samples:
+            few_shot_without_answers = without_answers.sample(
+                n=min(half_of_total_samples, len(without_answers)), random_state=45, replace=True
+            )
+            few_shot_samples = pd.concat([few_shot_with_answers, few_shot_without_answers])
+        else:
+            few_shot_samples = with_answers.sample(n=min(total_samples, len(with_answers)), random_state=45, replace=True)
+
+        # Augment data
+        augmented_samples = []
+
+        def augment_context(row):
+            context = row['context']
+            words = context.split()
+            random.shuffle(words)
+            return ' '.join(words)
+
+        def augment_row(row):
+            row['context'] = augment_context(row)
+            return row
+
+        for _, row in few_shot_samples.iterrows():
+            augmented_samples.append(augment_row(row))
+
+        few_shot_samples = pd.concat([few_shot_samples, pd.DataFrame(augmented_samples)])
+
         # Preprocess train and validation data
-        preprocessed_train_data = [self.preprocess_row(row, tokenizer) for _, row in self.train_data.iterrows()]
+        preprocessed_train_data = [self.preprocess_row(row, tokenizer) for _, row in few_shot_samples.iterrows()]
         preprocessed_val_data = [self.preprocess_row(row, tokenizer) for _, row in self.val_data.iterrows()]
 
         train_loader = DataLoader(preprocessed_train_data, batch_size=8, shuffle=True, collate_fn=default_data_collator)
