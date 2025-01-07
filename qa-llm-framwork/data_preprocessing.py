@@ -1,5 +1,6 @@
 import json
 import csv
+import string
 import pandas as pd
 import re
 import os
@@ -58,6 +59,16 @@ class DataPreprocessing:
         print(f"Head of {output_path}:")
         print(df.head())
 
+    def remove_ascii_symbols(input_string):
+        # The set of ASCII symbols
+        symbols = string.punctuation  # This includes all punctuation symbols: !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
+        symbols_set = set(symbols) - {'?'} # Better identify qestions
+        
+        # Remove all ASCII symbols from the string
+        cleaned_string = ''.join(char for char in input_string if char not in symbols_set)
+        
+        return cleaned_string
+
     def preprocess_row(self, row, tokenizer):
         context = str(row['context']) if not pd.isna(row['context']) else ""
         question = str(row['question']) if not pd.isna(row['question']) else ""
@@ -67,11 +78,15 @@ class DataPreprocessing:
         end_char = start_char + len(answer_text) if start_char != -1 else -1
 
         # Step 1: Clean special characters
-        context = re.sub(r'[^\x00-\x7F]+', ' ', context)  # Remove non-ASCII characters (e.g., â€“)
-        context = re.sub(r'\s+', ' ', context).strip()    # Normalize whitespace
+        # context = re.sub(r'[^\x00-\x7F]+', ' ', context)  # Remove non-ASCII characters (e.g., â€“)
+        # context = re.sub(r'\s+', ' ', context).strip()    # Normalize whitespace
 
-        question = re.sub(r'[^\x00-\x7F]+', ' ', question)  # Remove non-ASCII characters (e.g., â€“)
-        question = re.sub(r'\s+', ' ', question).strip()    # Normalize whitespace
+        # question = re.sub(r'[^\x00-\x7F]+', ' ', question)  # Remove non-ASCII characters (e.g., â€“)
+        # question = re.sub(r'\s+', ' ', question).strip()    # Normalize whitespace
+
+        # Function call for refining the context and question
+        context = DataPreprocessing.remove_ascii_symbols(context)
+        question = DataPreprocessing.remove_ascii_symbols(question)
 
         tokenized = tokenizer(
             text=question,
