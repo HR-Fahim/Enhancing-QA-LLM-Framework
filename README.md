@@ -1,4 +1,4 @@
-# Enhancing Few-Shot Question Answering Frameworks with Simplified Mixture of Experts (MoE), Dynamic Multi-head Attention, and Learnable Positional Encoding
+# Enhancing Few-Shot Question Answering Framewor with Simplified Mixture of Experts (MoE), Dynamic Multi-head Attention, and Learnable Positional Encoding
 
 ## Datasets (Benchmark):
 
