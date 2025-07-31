@@ -1,4 +1,4 @@
-# Enhancing Few-Shot Question Answering Framewor with Simplified Mixture of Experts (MoE), Dynamic Multi-head Attention, and Learnable Positional Encoding
+# DynaMoE-LPE: Enhancing Few-Shot Question Answering Framework Using Dynamic Multi-Head Attention With Mixture of Experts and Learnable Positional Encoding
 
 ## Datasets (Benchmark):
 
